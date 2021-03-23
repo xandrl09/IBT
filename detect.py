@@ -4,30 +4,43 @@ import time
 import os
 from datetime import datetime
 
+
 from PIL import Image
+
+import results
+import main
+
+
+counter = 0
+novy = True
 
 
 def picture_from_video():
-    cap = cv2.VideoCapture("C:/Users/a/Desktop/obrazky/videa_cele/17vyrobku_komplet.mp4")
+
+    #cap = cv2.VideoCapture("C:/Users/a/Desktop/obrazky/videa/b.mp4")
+    config = open("C:/Users/a/Desktop/obrazky/konfigurace/config.txt", "r")
+    cap = cv2.VideoCapture(config.readline())
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     j = 0
     stri = str(datetime.today().strftime('%Y_%m_%d_%H_%M_%S'))
-    text_file = open("C:/Users/a/Desktop/obrazky/vysledky/" + stri + ".txt", "x")#
+    filename = "C:/Users/a/Desktop/obrazky/vysledky/" + stri + ".txt"
+    text_file = open(filename, "x")#
+    text_file.write("Test probehl v :" + str(datetime.today().strftime('%Y-%m-%d-%H:%M:%S')) + " \n")
+    text_file.close()
+    text_file = open(filename, 'a')
     while True:
         j += 1
         for i in range(fps - 1):
             cap.read()
-        ret, img = cap.read(0)
-        cimg = detection(img, text_file)
+        ret, img = cap.read()
         #if j == 5:
          #   break
         try:
-            cv2.imwrite("C:/Users/a/Desktop/obrazky/test/" + str(j) + ".jpg", cimg)
+            cimg = detection(img, text_file, j)
         except:
             text_file.close()
             break
-
-
+        cv2.imwrite("C:/Users/a/Desktop/obrazky/test/" + str(j) + ".jpg", cimg)
 
 
 
@@ -39,7 +52,11 @@ def crop_image():
 """
 
 
-def detection(img, text_file):
+def detection(img, text_file, j):
+    global counter
+    global novy
+    ledky = 64
+    #cv2.imwrite("C:/Users/a/Desktop/obrazky/test/" + str(j) + ".jpg", img)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # prevod do sedotonu
     #img = cv2.imread("C:/Users/a/Desktop/obrazky/3lines/big_0.jpg", 0)
     # picture resize 3016 4032 -> 570 760 video resize 1920 1080 -> 960 540
@@ -53,16 +70,28 @@ def detection(img, text_file):
     rows = cimg.shape[0]
 
     # led detection
-    circles = cv2.HoughCircles(tresh, cv2.HOUGH_GRADIENT, 1, 28, param1=100, param2=12, minRadius=15, maxRadius=30)
+    circles = cv2.HoughCircles(tresh, cv2.HOUGH_GRADIENT, 1, 28, param1=110, param2=13, minRadius=15, maxRadius=30)
 
     if circles is not None:
-
-        circles = np.uint16(np.around(circles))
-        for i in circles[0, :]:
-            # draw the outer circle
-            cv2.circle(cimg, (i[0], i[1]), i[2], (0, 0, 255), 2)
-            # draw the center of the circle
-            # cv2.circle(cimg, (i[0], i[1]), 1, (0, 0, 255), 2)
+        if novy == True:
+            counter += 1
+            text_file.write("Vyrobek " + str(counter))
+            pocet_ledek = len(circles[0,:])
+            if pocet_ledek == ledky:
+                text_file.write(" je v poradku, ma:" + str(pocet_ledek) + " funkcnich ledek\n")
+            else:
+                text_file.write(" je vadny, ma: " + str(pocet_ledek) + "funkcnich ledek a " + str(ledky - pocet_ledek)
+                                + " nefunkcnich\n")
+            circles = np.uint16(np.around(circles))
+            for i in circles[0, :]:
+                # draw the outer circle
+                cv2.circle(cimg, (i[0], i[1]), i[2], (0, 0, 255), 2)
+                # draw the center of the circle
+                # cv2.circle(cimg, (i[0], i[1]), 1, (0, 0, 255), 2)
+            novy = False
+    else:
+        if novy == False:
+            novy = True
 
     #show_detected(cimg)
     return cimg

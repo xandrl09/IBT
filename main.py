@@ -4,11 +4,13 @@ from tkinter import filedialog, PhotoImage
 import cv2
 
 import detect
-import read_results
+import results
+
 
 
 class Main(object):
     DEFAULT_COLOR = 'black'
+
 
     def __init__(self):
         self.root = Tk()
@@ -22,7 +24,7 @@ class Main(object):
         self.color_button = Button(self.root, text='vyber plochu')
         self.color_button.grid(row=2, column=0)
 
-        self.eraser_button = Button(self.root, text='eraser')
+        self.eraser_button = Button(self.root, text='zrus vyber')
         self.eraser_button.grid(row=3, column=0)
 
         choices = ['zelene', 'cervene', 'oboje']
@@ -37,18 +39,18 @@ class Main(object):
         self.input = Entry(self.root)
         self.input.grid(row=6, column=0)
 
-        self.start_button = Button(self.root, text='Spustit')
+        self.start_button = Button(self.root, text='Spustit', command=detect.picture_from_video)
         self.start_button.grid(row=7, column=0)
 
         global my_text
-        my_text = Text(height=20, width=30)
-        my_text.grid(row=0, rowspan=3, column=2)
+        my_text = Text(height=30, width=60)
+        my_text.grid(row=0, rowspan=5, column=2)
 
-        self.stats_button = Button(self.root, text='Statistiky', command=self.open_text)
-        self.stats_button.grid(row=7, column=2)
+        self.stats_button = Button(self.root, text='Zobraz statistiky', command=self.open_text)
+        self.stats_button.grid(row=6, column=2)
 
         self.save_button = Button(self.root, text='Uložit záznam', command=self.save_text)
-        self.save_button.grid(row=8, column=2)
+        self.save_button.grid(row=7, column=2)
 
         self.c = Canvas(self.root, bg='white', width=590, height=780)
         self.c.grid(row=0, rowspan=10, column=1)
@@ -66,13 +68,14 @@ class Main(object):
         self.c.create_image(10, 10, image=my_image, anchor=NW)
 
     def open_video(self):
-        global my_image
-        self.filename = filedialog.askopenfilename(initialdir="C:/Users/a/Desktop/obrazky/", title="vyberte vydeo",
+
+        self.filename = filedialog.askopenfilename(initialdir="C:/Users/a/Desktop/obrazky/videa", title="vyberte vydeo",
                                                    filetypes=(("mp4 files", "*.mp4"), ("all files", "*.*")))
-        my_image = Image.open(self.filename)
+        text_file = open("C:/Users/a/Desktop/obrazky/konfigurace/config.txt", "w")
+        text_file.write(str(self.filename))
 
     def open_text(self):
-
+        my_text.delete("1.0", "end")
         text_file = filedialog.askopenfilename(initialdir="C:/Users/a/Desktop/obrazky/vysledky/",
                                               title="vyhledejte vysledky"
                                               , filetypes=(("text files", "*.txt"), ("all files", "*.*")))
@@ -106,8 +109,8 @@ class Main(object):
 
 
 if __name__ == '__main__':
-    #Main()
-    detect.picture_from_video()
+    Main()
+    #detect.picture_from_video()
     #detect.detection()
 
 
