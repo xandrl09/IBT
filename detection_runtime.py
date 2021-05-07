@@ -1,14 +1,21 @@
+#########################################
+#  Skript pro detekci kruhových objektů #
+#                                       #
+#  Author: Ondřej Andlra                #
+#  Email: xandrl09@stud.fit.vutbr.cz    #
+#  Rok: 2021                            #
+#########################################
+
+# importovani potrebnych knihoven
 import cv2
 import numpy as np
-import time
-import os
 from datetime import datetime
 import json
 from PIL import ImageColor
-
 import sys
 import getopt
 
+# definice globálních proměnných
 counter = 0
 is_new_product = True
 is_second_product = False
@@ -18,6 +25,7 @@ output_configuration_file = None
 output_configuration_file_address = None
 
 
+# funkce pro zpracování parametrů
 def parse_params():
     global input_camera
     global input_configuration_file
@@ -32,14 +40,15 @@ def parse_params():
         opts = []
 
     for opt, arg in opts:
-        if opt in ['-a']:
+        if opt in ['-a']:  # adresa videa
             input_camera = arg
-        elif opt in ['-i']:
+        elif opt in ['-i']:  # adresa konfiguracniho souboru
             input_configuration_file = arg
-        elif opt in ['-o']:
+        elif opt in ['-o']:  # adresa slozky pro soubor s vysledky
             output_configuration_file_address = arg
 
 
+# funkce pro zapis vysledku ve formatu JSON
 def write_json(data):
     global output_configuration_file
     with open(output_configuration_file, "w") as o:
@@ -53,47 +62,60 @@ def picture_from_video():
     global output_configuration_file
     global output_configuration_file_address
     global input_camera
-    #captured_video = cv2.VideoCapture("C:/Users/a/Desktop/obrazky/videa/b.mp4")
-    #configuration_file = open("C:/Users/a/Desktop/obrazky/konfigurace/config.txt", "r")
+    rychlost = 1
+
     captured_video = cv2.VideoCapture(input_camera)
     fps = int(captured_video.get(cv2.CAP_PROP_FPS))
-    j = 0
+
+    # soubor s vysledky pojmenovan podle data provedeni detekce
     stri = str(datetime.today().strftime('%Y_%m_%d_%H_%M_%S'))
-    output_configuration_file = output_configuration_file_address + stri + ".json"  # todo zmenit
+    # soubor s vysledky
+    output_configuration_file = output_configuration_file_address + stri + ".json"
 
     # JSON
     data = {}
     with open(output_configuration_file, "w") as f:
         json.dump(data, f, indent=4)
 
-    #output_configuration_file.close()
+    try:
+        with open(input_configuration_file) as js:
+            input_data = json.load(js)
+            input_temp = input_data[0]
+            #
+            rychlost = input_temp["rychlost snimani"]
+            if rychlost < 500:
+                rychlost = 500
+            if rychlost > 2000:
+                rychlost = 2000
+            rychlost = int(rychlost / 1000)
+
+    except:
+            pass
 
     while True:
-        j += 1
-        for i in range(fps - 1):
+        for i in range(fps * rychlost - 1):
             captured_video.read()
         ret, img = captured_video.read()
 
         try:
-            #cv2.imwrite("C:/Users/a/Desktop/obrazky/test/" + str(j + 40) + ".jpg", img)
             with open(input_configuration_file) as js:
                 input_data = json.load(js)
                 for a in input_data:
-                    #print(a)
-                    cimg = detection(img, a, j)
+                    color_img = detection(img, a)
         except:
             break
-        cv2.imwrite("C:/Users/a/Desktop/obrazky/test/" + str(j + 20) + ".jpg", cimg)
 
 
-
-
-def detection(img, a, j):
+# funkce provadi detekci kruhovych objektu v obraze
+def detection(img, a):
     global counter
     global is_new_product
     global is_second_product
     global input_configuration_file
     global output_configuration_file
+
+    green_lower_range = 174
+    blue_upper_range = 93
 
     # video resize 1920 1080 -> 960 540
     img = cv2.resize(img, (960, 540))
@@ -101,10 +123,13 @@ def detection(img, a, j):
     with open(input_configuration_file) as js:
         input_data = json.load(js)
         input_temp = input_data[a]
+        # pokud je v konfiguraci specifikovan pocet LED
         try:
             ledky = input_temp["pocet LED"]
         except:
             ledky = 64
+        # pokud je v konfiguraci specifikovana pozice obdelniku pro hledani
+        # odecitani -10 = korekce toho, ze GUI pripocitava v Canvas 10 na okraj
         try:
             x, xx = input_temp["pozice"][0], input_temp["pozice"][2]
             x -= 10
@@ -115,45 +140,29 @@ def detection(img, a, j):
             img = img[y:yy, x:xx]  #
         except:
             pass
+        # pokud je v konfiguraci specifikovana barva
         try:
             color = input_temp["barva"]
             dispersion = input_temp["tolerance"]
             R, G, B = ImageColor.getcolor(color, "RGB")
-            print(R, G, B)
             lower_range = np.array([R - int(dispersion), G - int(dispersion), B - int(dispersion)])
             upper_range = np.array([R + int(dispersion * 3), G + int(dispersion), B + int(dispersion)])
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            mask = cv2.inRange(img, lower_range, upper_range )
-            #cv2.imwrite("C:/Users/a/Desktop/obrazky/test/" + str(j) + ".jpg", mask)
-            colored_img = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-            rows = colored_img.shape[0]
-            circles = cv2.HoughCircles(mask, cv2.HOUGH_GRADIENT, 1, 28, param1=90, param2=13, minRadius=15,
-                                       maxRadius=30)
+        # pokud neni barva specifikovana
         except:
-            lower_range = np.array([0, 174, 0]) #  todo
-            upper_range = np.array([255, 255, 93])
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            mask = cv2.inRange(img, lower_range, upper_range)
-            #cv2.imwrite("C:/Users/a/Desktop/obrazky/test/" + str(j) + ".jpg", mask)
-            colored_img = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-            rows = colored_img.shape[0]
-            circles = cv2.HoughCircles(mask, cv2.HOUGH_GRADIENT, 1, 28, param1=90, param2=13, minRadius=15,
-                                       maxRadius=30)
-            # # cv2.imwrite("C:/Users/a/Desktop/obrazky/test/" + str(j) + ".jpg", img)
-            # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # prevod do sedotonu
-            # #cv2.imwrite("C:/Users/a/Desktop/obrazky/test/" + str(j) + ".jpg", img)
-            # img = cv2.medianBlur(img, 1)
-            # treshold, tresh = cv2.threshold(img, 150, 255, cv2.THRESH_BINARY)
-            # cv2.imwrite("C:/Users/a/Desktop/obrazky/test/" + str(j) + ".jpg", tresh)
-            # colored_img = cv2.cvtColor(tresh, cv2.COLOR_GRAY2BGR)
-            # rows = colored_img.shape[0]
-            # circles = cv2.HoughCircles(tresh, cv2.HOUGH_GRADIENT, 1, 28, param1=90, param2=13, minRadius=15,
-            #                            maxRadius=30)
+            lower_range = np.array([0, green_lower_range, 0])
+            upper_range = np.array([255, 255, blue_upper_range])
 
-    # led detection
-    if circles is not None:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        mask = cv2.inRange(img, lower_range, upper_range)
+        colored_img = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+        rows = colored_img.shape[0]
+        detected_circles = cv2.HoughCircles(mask, cv2.HOUGH_GRADIENT, 1, 28, param1=90, param2=13, minRadius=15,
+                                            maxRadius=30)
+
+    #  detekce LED
+    if detected_circles is not None:
         if is_new_product == True:
-            if is_second_product == False:
+            if is_second_product == False: # vyfiltrování prvních přesvětlených snímků
                 is_second_product = True
             else:
                 counter += 1
@@ -170,7 +179,7 @@ def detection(img, a, j):
                     temp.update(i)
                     write_json(data)
 
-                pocet_ledek = len(circles[0, :])
+                pocet_ledek = len(detected_circles[0, :])
 
                 if pocet_ledek == int(ledky):
                     with open(output_configuration_file) as js:
@@ -186,17 +195,16 @@ def detection(img, a, j):
                         temp = data["vyrobek" + str(counter)]
                         t = temp[str(a)]
                         y = {"stav": "vadny"}
-                        print(int(ledky) - pocet_ledek)
+                        # print(int(ledky) - pocet_ledek)
                         y["chyby"] = int(ledky) - pocet_ledek
                         t.update(y)
                         write_json(data)
 
-                circles = np.uint16(np.around(circles))
-                for i in circles[0, :]:
-                    # draw the outer circle
+                detected_circles = np.uint16(np.around(detected_circles))
+                for i in detected_circles[0, :]:
+                    # vykresleni detekovaných kružnic
                     cv2.circle(colored_img, (i[0], i[1]), i[2], (0, 0, 255), 2)
-                    # draw the center of the circle
-                    # cv2.circle(colored_img, (i[0], i[1]), 1, (0, 0, 255), 2)
+
                 is_new_product = False
                 is_second_product = False
     else:
@@ -207,38 +215,8 @@ def detection(img, a, j):
     return colored_img
 
 
-# def color_detection()
-
-
-# Funkce zobrazý snímek obsahující detekované objekty.
-def show_detected(cimg):
-    cv2.namedWindow('detected circles', cv2.WINDOW_NORMAL)
-    cv2.resizeWindow('detected circles', 570, 760)
-
-    cv2.imshow('detected circles', cimg)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
-
-# Funkce zobrazý snímek vzniklí prahováním.
-def show_threshold(tresh):
-    cv2.namedWindow('threshold', cv2.WINDOW_NORMAL)
-    cv2.resizeWindow('threshold', 570, 760)
-    cv2.imshow('threshold', tresh)
-
-
-#
-def all_circle_detection(img, cimg):
-    circles1 = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1, 28,
-                                param1=100, param2=30, minRadius=30, maxRadius=60)
-
-    if circles1 is not None:
-        circles1 = np.uint16(np.around(circles1))
-        for i in circles1[0, :]:
-            # draw the outer circle
-            cv2.circle(cimg, (i[0], i[1]), i[2], (0, 255, 0), 2)
-
-
+# hlavni funkce
+# volá zpracovani paramerů a detekci objektů
 def main():
     parse_params()
     picture_from_video()
